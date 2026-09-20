@@ -75,9 +75,27 @@ jobs:
 
       - name: Create AppImage
         run: |
-          mkdir -p AppDir/usr/bin
-          cp target/release/file-aggregator AppDir/usr/bin/
-          ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
+          mkdir -p \
+            AppDir/usr/bin \
+            AppDir/usr/share/applications
+
+          cp target/release/file-aggregator AppDir/usr/bin/file-aggregator
+
+          cat > AppDir/usr/share/applications/file-aggregator.desktop <<'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=File Aggregator
+          Comment=File aggregator
+          Exec=file-aggregator
+          Terminal=false
+          Categories=Utility;
+          EOF
+
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --desktop-file AppDir/usr/share/applications/file-aggregator.desktop \
+            --output appimage
+
           mv file-aggregator-*.AppImage file-aggregator-linux-x86_64.AppImage
 
       - name: Upload AppImage
