@@ -45,3 +45,7 @@ test_*.rs
 **/*.rlib
 **/.fingerprint/
 **/*.rs.bk
+
+# AI files
+CLAUDE.md
+AGENTS.md

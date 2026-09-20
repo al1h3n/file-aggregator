@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-egui = "0.29"
+egui = "0.36"
 eframe = "0.36"
 clap = { version = "4.5", features = ["derive"] }
 arboard = "3.4"
-infer = "0.16"
+infer = "0.22"
 base64 = "0.23"
 rfd = "0.17"
 anyhow = "1.0"

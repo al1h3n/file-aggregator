@@ -75,6 +75,8 @@ jobs:
 
       - name: Create AppImage
         run: |
+          set -euo pipefail
+
           mkdir -p \
             AppDir/usr/bin \
             AppDir/usr/share/applications \
@@ -100,7 +102,15 @@ jobs:
             --icon-file icon.png \
             --output appimage
 
-          mv file-aggregator-*.AppImage file-aggregator-linux-x86_64.AppImage
+          appimage="$(find . -maxdepth 1 -type f -name '*.AppImage' \
+            ! -name 'linuxdeploy-x86_64.AppImage' -print -quit)"
+
+          if [[ -z "$appimage" ]]; then
+            echo "linuxdeploy did not produce an AppImage" >&2
+            exit 1
+          fi
+
+          mv "$appimage" file-aggregator-linux-x86_64.AppImage
 
       - name: Upload AppImage
         uses: actions/upload-artifact@v4
@@ -113,6 +123,8 @@ jobs:
     needs: [build, build-appimage]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -121,11 +133,25 @@ jobs:
         with:
           path: artifacts
 
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          # download-artifact@v4 puts each artifact in artifacts/<name>/<original-file>
+          # Flatten and rename to the artifact (asset) name
+          for dir in artifacts/*/; do
+            asset_name="$(basename "$dir")"
+            file="$(find "$dir" -maxdepth 1 -type f -print -quit)"
+            if [ -n "$file" ]; then
+              cp "$file" "release-assets/$asset_name"
+            fi
+          done
+          echo "Release assets:"
+          ls -lh release-assets/
+
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*
+          files: release-assets/*
+          generate_release_notes: true
           draft: false
           prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
