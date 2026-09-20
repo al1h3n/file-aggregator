@@ -17,6 +17,11 @@ struct FileEntry {
 
 /// Aggregate multiple files into prompt format
 pub fn aggregate_files(paths: &[PathBuf]) -> Result<String> {
+    aggregate_files_with_prompt(paths, None)
+}
+
+/// Aggregate multiple files with optional custom prompt
+pub fn aggregate_files_with_prompt(paths: &[PathBuf], custom_prompt: Option<&str>) -> Result<String> {
     // Total size limit: 200MB
     const MAX_TOTAL_SIZE: u64 = 200 * 1024 * 1024;
     
@@ -105,7 +110,16 @@ pub fn aggregate_files(paths: &[PathBuf]) -> Result<String> {
     
     // Phase 2: Sequential aggregation with size check
     let mut total_size: u64 = 0;
-    let mut output = String::from("BEGINNING\nRead following file and answer question given:\nQUESTION\n\n");
+    let mut output = String::from("BEGINNING\nRead following file and answer question given:\n");
+    
+    if let Some(prompt) = custom_prompt {
+        if !prompt.trim().is_empty() {
+            output.push_str(prompt);
+            output.push_str("\n\n");
+        }
+    } else {
+        output.push_str("QUESTION\n\n");
+    }
     
     for entry in entries {
         total_size += entry.size;

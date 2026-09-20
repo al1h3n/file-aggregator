@@ -1,6 +1,7 @@
 # Build artifacts
 /target/
 Cargo.lock
+.cargo/
 
 # IDE/Editor
 .vscode/
@@ -8,11 +9,37 @@ Cargo.lock
 *.swp
 *.swo
 *~
+.fleet/
+*.iml
 
 # OS
 .DS_Store
 Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
 
-# Temporary
+# Temporary & test files
 *.tmp
 *.bak
+*.log
+*.orig
+*.rej
+.scratch/
+test_*.rs
+%SystemDrive%/
+%*%/
+
+# Binary & compiled
+*.exe
+*.dll
+*.so
+*.dylib
+*.o
+*.obj
+*.a
+*.lib
+
+# Rust incremental compilation
+**/*.rmeta
+**/*.rlib
+**/.fingerprint/

@@ -35,19 +35,42 @@ pub fn validate_path(path: &Path) -> Result<PathBuf> {
         ];
         
         for name in &dangerous_names {
-            if upper.contains(name) {
+            // Check for standalone device names (word boundaries)
+            let upper_str = upper.as_str();
+            if upper_str == *name 
+                || upper_str.starts_with(&format!("{}.", name))
+                || upper_str.starts_with(&format!("{}:", name))
+                || upper_str.contains(&format!("\\{}.", name))
+                || upper_str.contains(&format!("\\{}", name)) && upper_str.ends_with(name)
+                || upper_str.contains(&format!("/{}.", name))
+                || upper_str.contains(&format!("/{}", name)) && upper_str.ends_with(name)
+            {
                 anyhow::bail!("Windows device name detected: {}", path_str);
             }
         }
         
-        // Check for UNC paths
-        if path_str.starts_with("\\\\") {
+        // Check for UNC paths (block \\?\UNC\ but allow \\?\C:\ extended-length local paths)
+        // After canonicalize(), Windows adds \\?\ prefix for long paths
+        if path_str.starts_with(r"\\?\UNC\") || path_str.starts_with(r"\?\UNC\")
+            || (path_str.starts_with(r"\\") && !path_str.starts_with(r"\\?\") && !path_str.starts_with(r"\?\")) {
             anyhow::bail!("UNC paths not allowed: {}", path_str);
         }
         
-        // Check for alternate data streams
-        if path_str.contains(':') && !path_str.chars().nth(1).map_or(false, |c| c == ':') {
-            anyhow::bail!("Alternate data stream detected: {}", path_str);
+        // Check for alternate data streams (C:\path\file.txt:stream)
+        // Allow drive letter colon (C:) and extended path prefix (\\?\C:)
+        let drive_letter_positions: Vec<usize> = path_str.match_indices(':')
+            .map(|(i, _)| i)
+            .collect();
+        
+        for pos in drive_letter_positions {
+            // Valid: C:, \\?\C:, \?\C:
+            let is_drive_letter = (pos == 1) // C:
+                || (pos == 5 && path_str.starts_with(r"\\?\")) // \\?\C:
+                || (pos == 3 && path_str.starts_with(r"\?\"));  // \?\C:
+            
+            if !is_drive_letter {
+                anyhow::bail!("Alternate data stream detected: {}", path_str);
+            }
         }
     }
     
@@ -88,11 +111,19 @@ pub fn detect_binary(path: &Path) -> Result<bool> {
 /// Read file safely, encoding binaries as Base64
 pub fn read_file_safe(path: &Path) -> Result<String> {
     let is_binary = detect_binary(path)?;
+    let (is_exec, exec_type) = is_executable_file(path)?;
     
     if is_binary {
-        // Warn about executable files
-        if is_executable(path)? {
-            eprintln!("⚠️  WARNING: {} appears to be an executable file", path.display());
+        // Check size limit for executables
+        if is_exec {
+            const MAX_EXEC_SIZE: u64 = 50 * 1024 * 1024; // 50MB (raised from 10MB for archives)
+            let metadata = fs::metadata(path)?;
+            if metadata.len() > MAX_EXEC_SIZE {
+                anyhow::bail!(
+                    "Executable file too large: {} MB (max: 50 MB)",
+                    metadata.len() / 1024 / 1024
+                );
+            }
         }
         
         // Read and Base64 encode
@@ -100,14 +131,112 @@ pub fn read_file_safe(path: &Path) -> Result<String> {
             .with_context(|| format!("Failed to read binary file: {}", path.display()))?;
         
         let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
-        Ok(format!("```base64\n{}\n```", encoded))
+        
+        if is_exec {
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            Ok(format!(
+                "# WARNING: Executable file content below\n# Type: {}\n# Added: {}\n```base64\n{}\n```",
+                exec_type, timestamp, encoded
+            ))
+        } else {
+            Ok(format!("```base64\n{}\n```", encoded))
+        }
     } else {
         // Read as text, strip NULL bytes
         let content = fs::read_to_string(path)
             .with_context(|| format!("Failed to read text file: {}", path.display()))?;
         
-        Ok(content.replace('\0', ""))
+        let clean_content = content.replace('\0', "");
+        
+        if is_exec {
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            Ok(format!(
+                "# WARNING: Executable file content below\n# Type: {}\n# Added: {}\n{}",
+                exec_type, timestamp, clean_content
+            ))
+        } else {
+            Ok(clean_content)
+        }
     }
+}
+
+/// Strip Windows extended-length path prefix for display
+pub fn strip_windows_prefix(path: &str) -> String {
+    if path.starts_with(r"\\?\") {
+        path[4..].to_string()
+    } else {
+        path.to_string()
+    }
+}
+
+/// Check if file is executable (both extension and magic bytes)
+pub fn is_executable_file(path: &Path) -> Result<(bool, String)> {
+    // Check extension first
+    let ext = path.extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+    
+    let executable_extensions = [
+        // Windows
+        "exe", "dll", "bat", "cmd", "ps1", "msi", "scr", "com", "pif", 
+        "vbs", "js", "wsf", "hta", "cpl", "jar",
+        // Unix/Linux
+        "sh", "run", "bin", "elf", "deb", "rpm", "appimage", "out",
+        // macOS
+        "app", "dmg", "pkg", "command",
+        // Scripts
+        "py", "rb", "pl", "php", "lua",
+        // Archives (may contain executables)
+        "zip", "tar", "gz", "7z", "rar", "bz2", "xz",
+    ];
+    
+    let is_exec_ext = executable_extensions.contains(&ext.as_str());
+    
+    // Check magic bytes
+    let is_exec_magic = is_executable(path)?;
+    
+    if is_exec_ext || is_exec_magic {
+        let file_type = if is_exec_magic {
+            detect_executable_type(path)?
+        } else {
+            format!(".{} file", ext)
+        };
+        Ok((true, file_type))
+    } else {
+        Ok((false, String::new()))
+    }
+}
+
+/// Detect executable type from magic bytes
+fn detect_executable_type(path: &Path) -> Result<String> {
+    let mut file = fs::File::open(path).context("Failed to open file")?;
+    use std::io::Read;
+    let mut header = [0u8; 4];
+    file.read_exact(&mut header).ok();
+    
+    let file_type = match &header {
+        [0x4D, 0x5A, _, _] => "PE executable (Windows .exe/.dll)",
+        [0x7F, 0x45, 0x4C, 0x46] => "ELF executable (Linux)",
+        [0xFE, 0xED, 0xFA, 0xCE] | [0xCE, 0xFA, 0xED, 0xFE] => "Mach-O executable (macOS 32-bit)",
+        [0xFE, 0xED, 0xFA, 0xCF] | [0xCF, 0xFA, 0xED, 0xFE] => "Mach-O executable (macOS 64-bit)",
+        [0x23, 0x21, _, _] => "Script with shebang",
+        _ => {
+            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                &format!(".{} file", ext)
+            } else {
+                "Unknown executable"
+            }
+        }
+    };
+    
+    Ok(file_type.to_string())
 }
 
 /// Detect if file is executable based on magic bytes

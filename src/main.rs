@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use std::fs;
