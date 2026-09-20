@@ -275,7 +275,7 @@ See `BENCHMARKS.md` for detailed methodology and troubleshooting.
 
 ## License
 
-Free to use under [MIT License](LICENSE) (or Apache-2.0 — see LICENSE file).
+Licensed under the [MIT License](LICENSE).
 
 ## Support This Project
 
