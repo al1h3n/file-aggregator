@@ -9,7 +9,7 @@ File Aggregator takes multiple files from your filesystem and combines them into
 ## Features
 
 - **Dual Interface**: GUI with drag-and-drop support + full-featured CLI
-- **Cross-Platform**: macOS and Linux support, single binary with no runtime dependencies
+- **Cross-Platform**: Windows, macOS and Linux support, single binary with no runtime dependencies
 - **Security Controls**:
   - Path validation with canonical resolution (prevents traversal attacks)
   - Per-file size limits (50 MB max)
@@ -59,7 +59,7 @@ cargo build --release --target x86_64-unknown-linux-gnu
 - Visual Studio 2022 Build Tools with "Desktop development with C++" workload
 - Rust toolchain (rustup will auto-detect MSVC)
 
-**Important:** Ensure MSVC `link.exe` is in PATH before Git's Unix `link.exe`. 
+**Important:** Ensure MSVC `link.exe` is in PATH before Git's Unix `link.exe`.
 
 **Verify toolchain:**
 ```powershell
@@ -80,40 +80,85 @@ If you see "link: missing operand" error, your PATH has Git's link.exe before MS
 
 Expected binary size: 5-8 MB per platform.
 
-## Usage
+## Installation
 
-### GUI Mode
+### Download Pre-Built Binary (Recommended)
 
-Launch without arguments to start the graphical interface:
+**Windows:**
+1. Download `file-aggregator-windows.exe` from [Releases](https://github.com/your-username/file-aggregator/releases)
+2. Rename to `file-aggregator.exe`
+3. Run from command prompt or double-click for GUI
+
+**macOS:**
+```bash
+# Download and install
+curl -L https://github.com/your-username/file-aggregator/releases/latest/download/file-aggregator-macos -o file-aggregator
+chmod +x file-aggregator
+sudo mv file-aggregator /usr/local/bin/
+```
+
+**Linux:**
+```bash
+# Download and install
+wget https://github.com/your-username/file-aggregator/releases/latest/download/file-aggregator-linux
+chmod +x file-aggregator-linux
+sudo mv file-aggregator-linux /usr/local/bin/file-aggregator
+```
+
+### Build from Source
+
+See "Build Instructions" section below.
+
+## Quick Start
+
+### GUI Mode (Default)
+
+Launch without arguments:
 
 ```bash
 ./file-aggregator
 ```
 
-Drag and drop files into the window. The tool will validate paths, check sizes, and aggregate content. Use the "Save" button to export or "Copy" to send to clipboard.
+Drag and drop files into the window, then click "Save" or "Copy to Clipboard".
 
 ### CLI Mode
 
 ```bash
-# Aggregate specific files
-./file-aggregator file1.rs file2.toml file3.md
+# Aggregate files and copy to clipboard
+./file-aggregator add file1.rs file2.toml file3.md
 
-# With output file
-./file-aggregator --output result.md src/*.rs
-
-# Allow executable files without prompting
-./file-aggregator --allow-executables script.sh binary.exe
+# Save to file instead
+./file-aggregator add --output result.md src/*.rs
 
 # Interactive file picker (requires 'gum' installed)
-./file-aggregator --interactive
+./file-aggregator interactive
 ```
 
-#### CLI Options
+**Common Use Case:** Preparing code context for AI assistants
+```bash
+# Copy all source files to clipboard for ChatGPT/Claude
+./file-aggregator add src/**/*.rs Cargo.toml
 
-- `--output <path>`, `-o <path>`: Write to file instead of stdout
-- `--allow-executables`: Skip confirmation prompts for executable files
-- `--interactive`, `-i`: Use interactive file picker (requires [gum](https://github.com/charmbracelet/gum))
-- `--help`: Show all available options
+# Save for later review
+./file-aggregator add --output context.md src/**/*.rs
+```
+
+## Usage
+
+### CLI Commands
+
+**`file-aggregator add <files...> [--output <path>]`**
+- Aggregate specified files
+- Copies to clipboard by default
+- Use `--output` to save to file instead
+
+**`file-aggregator interactive`**
+- Launch interactive file picker (requires [gum](https://github.com/charmbracelet/gum))
+- Select multiple files with space, confirm with enter
+
+**`file-aggregator gui` or `file-aggregator` (no arguments)**
+- Launch GUI application
+- Drag and drop files into window
 
 ### Output Format
 
@@ -206,11 +251,6 @@ Each script:
 ### Real-World Results
 
 **Test System:** Intel i7-12700F (12C/20T), 32GB RAM, NVMe SSD (MSI M480 PRO), Windows 11
-
-```
-⚠️ Benchmark blocked by Windows toolchain issue (Git link.exe vs MSVC linker)
-Will be executed on Linux/macOS binary once Torwalds completes builds.
-```
 
 **Expected results based on parallel I/O implementation:**
 - **Time:** 400-500ms for 200MB (20 files × 10MB)

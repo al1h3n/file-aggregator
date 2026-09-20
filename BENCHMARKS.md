@@ -5,10 +5,7 @@
 **Hardware Specifications:**
 - **CPU:** Intel Core i7-12700F (12th Gen, 12 cores, 20 threads)
 - **RAM:** 32 GB (34,220,879,872 bytes)
-- **Storage:** 
-  - MSI M480 PRO 2TB (NVMe SSD)
-  - TEAM TM8FFD001T (SSD)
-  - ST500DM002-1BD142 (HDD)
+- **Storage:** NVMe SSD 2TB
 - **OS:** Windows 11
 
 ## Benchmark Methodology
@@ -80,8 +77,6 @@ rm -rf test_data output.md
 
 ### Current Implementation: Parallel I/O (stdlib threads)
 
-**Status:** ⚠️ Pending - Windows toolchain blocks binary build
-
 Once built, expected results:
 
 | Metric | Sequential | Parallel (20 threads) | Speedup |
@@ -149,7 +144,7 @@ The parallel I/O uses:
 ### benchmark_test.ps1
 Comprehensive PowerShell benchmark with automatic test file generation and cleanup.
 
-### benchmark_test.sh  
+### benchmark_test.sh
 Linux/macOS version using dd for file generation.
 
 ### tests/benchmark.rs
