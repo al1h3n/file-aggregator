@@ -1,4 +1,47 @@
+# Build artifacts
 /target/
-**/*.rs.bk
 Cargo.lock
+.cargo/
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.fleet/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Temporary & test files
 icon.ico
+*.tmp
+*.bak
+*.log
+*.orig
+*.rej
+.scratch/
+test_*.rs
+%SystemDrive%/
+%*%/
+
+# Binary & compiled
+*.exe
+*.dll
+*.so
+*.dylib
+*.o
+*.obj
+*.a
+*.lib
+
+# Rust incremental compilation
+**/*.rmeta
+**/*.rlib
+**/.fingerprint/
+**/*.rs.bk
