@@ -72,8 +72,8 @@ struct FileAggregatorApp {
 }
 
 impl eframe::App for FileAggregatorApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ui, |ui| {
             ui.heading("File Aggregator");
             ui.add_space(10.0);
             
@@ -204,7 +204,7 @@ impl eframe::App for FileAggregatorApp {
                 ui.colored_label(egui::Color32::GREEN, format!("✅ {}", success));
                 
                 // Request repaint for timer update
-                ctx.request_repaint();
+                ui.ctx().request_repaint();
             }
             
             // Executable warning dialog
@@ -212,7 +212,7 @@ impl eframe::App for FileAggregatorApp {
                 egui::Window::new("Security Warning")
                     .collapsible(false)
                     .resizable(false)
-                    .show(ctx, |ui| {
+                    .show(ui.ctx(), |ui| {
                         ui.heading("Executable File Detected");
                         ui.add_space(10.0);
                         
@@ -243,13 +243,13 @@ impl eframe::App for FileAggregatorApp {
             }
             
             // Handle drag and drop
-            ctx.input(|i| {
+            ui.input(|i| {
                 if !i.raw.dropped_files.is_empty() {
                     // Catch panics during path extraction
                     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         let paths: Vec<PathBuf> = i.raw.dropped_files
                             .iter()
-                            .filter_map(|f| f.path.clone())
+                            .map(|f| f.path().to_path_buf())
                             .collect();
                         paths
                     }));
