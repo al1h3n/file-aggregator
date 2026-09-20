@@ -12,6 +12,12 @@ infer = "0.16"
 base64 = "0.22"
 rfd = "0.15"
 anyhow = "1.0"
+image = "0.25"
+
+[build-dependencies]
+winres = "0.1"
+ico = "0.3"
+image = "0.25"
 
 [dev-dependencies]
 tempfile = "3.13"

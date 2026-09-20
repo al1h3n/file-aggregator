@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use crate::aggregator::{aggregate_files_with_prompt};
 use crate::security::{validate_path, is_executable_file, strip_windows_prefix};
+use image;
 
 /// Truncate path to max_len, keeping start and end with "..." in middle
 fn truncate_path(path: &str, max_len: usize) -> String {
@@ -33,10 +34,22 @@ fn truncate_path(path: &str, max_len: usize) -> String {
 }
 
 pub fn run_gui() -> Result<()> {
+    let icon_data = include_bytes!("../icon.png");
+    let icon_image = image::load_from_memory(icon_data)
+        .unwrap_or_else(|_| image::DynamicImage::new_rgba8(128, 128))
+        .to_rgba8();
+    let (width, height) = icon_image.dimensions();
+    let icon = egui::IconData {
+        rgba: icon_image.into_raw(),
+        width,
+        height,
+    };
+    
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([800.0, 600.0])
-            .with_drag_and_drop(true),
+            .with_drag_and_drop(true)
+            .with_icon(icon),
         ..Default::default()
     };
     

@@ -1,5 +1,9 @@
 # File Aggregator
 
+<p align="center">
+  <img src="icon.png" alt="File Aggregator Icon" width="128" height="128">
+</p>
+
 Secure command-line and GUI tool for aggregating multiple files into a single markdown document. Built with Rust for cross-platform reliability and memory safety.
 
 ## What It Does
