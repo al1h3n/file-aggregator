@@ -53,6 +53,31 @@ cargo build --release --target x86_64-apple-darwin
 cargo build --release --target x86_64-unknown-linux-gnu
 ```
 
+### Building on Windows
+
+**Prerequisites:**
+- Visual Studio 2022 Build Tools with "Desktop development with C++" workload
+- Rust toolchain (rustup will auto-detect MSVC)
+
+**Important:** Ensure MSVC `link.exe` is in PATH before Git's Unix `link.exe`. 
+
+**Verify toolchain:**
+```powershell
+# Should show MSVC linker, not Git's Unix link
+where.exe link
+# First result should be: C:\Program Files\Microsoft Visual Studio\...
+```
+
+**Build:**
+```powershell
+cargo build --release --target x86_64-pc-windows-msvc
+```
+
+**Troubleshooting:**
+If you see "link: missing operand" error, your PATH has Git's link.exe before MSVC's. Fix by:
+1. Temporarily removing Git from PATH, or
+2. Running from "x64 Native Tools Command Prompt for VS 2022"
+
 Expected binary size: 5-8 MB per platform.
 
 ## Usage
@@ -128,9 +153,89 @@ Binary files are base64-encoded with a `[BINARY CONTENT - BASE64 ENCODED]` marke
 
 This tool validates input paths and applies security controls, but the aggregated text output is meant for **reading and review**, not automatic execution.
 
+## Performance Benchmarks
+
+File Aggregator uses parallel I/O (stdlib threads) to maximize throughput when aggregating multiple files.
+
+### What the Benchmarks Measure
+
+Standard test case: **20 files × 10MB each (200MB total)**
+
+Metrics:
+- Total aggregation time (file reading + formatting)
+- Throughput (MB/s)
+- Speedup vs sequential I/O
+
+### Running Benchmarks
+
+**Option 1: PowerShell (Windows)**
+```powershell
+.\benchmark_test.ps1
+```
+
+**Option 2: Bash (Linux/macOS)**
+```bash
+./benchmark_test.sh
+```
+
+**Option 3: Rust Integration Test**
+```bash
+cargo test --test benchmark -- --ignored --nocapture
+```
+
+Each script:
+- Auto-generates 20 test files (10MB each)
+- Runs 5 iterations
+- Reports average time, min/max, throughput
+- Auto-cleanup
+
+### Expected Performance
+
+**Baseline (Modern SSD):** 400-500ms for 200MB aggregation
+
+**Performance varies by:**
+- Storage type: NVMe SSD (best) > SATA SSD > HDD
+- CPU cores: More cores = better parallelization
+- File count: 10-50 files is optimal range
+- System load: Background processes affect results
+
+**Good indicators:**
+- Throughput > 300 MB/s on SSD
+- Consistent times across iterations
+
+### Real-World Results
+
+**Test System:** Intel i7-12700F (12C/20T), 32GB RAM, NVMe SSD (MSI M480 PRO), Windows 11
+
+```
+⚠️ Benchmark blocked by Windows toolchain issue (Git link.exe vs MSVC linker)
+Will be executed on Linux/macOS binary once Torwalds completes builds.
+```
+
+**Expected results based on parallel I/O implementation:**
+- **Time:** 400-500ms for 200MB (20 files × 10MB)
+- **Throughput:** 400-500 MB/s
+- **Speedup:** 4-6x vs sequential I/O
+
+**Theoretical analysis:**
+- NVMe sequential read: ~3,000 MB/s
+- With 20 parallel threads on 12-core CPU: Expected ~400-500 MB/s aggregate throughput
+- Bottleneck: Thread scheduling + mutex contention on result collection
+
+*Real benchmark results will replace this section once binary is available.*
+
+### How to Interpret Your Results
+
+Compare your throughput to expected baseline:
+- **>400 MB/s**: Excellent (modern NVMe SSD)
+- **200-400 MB/s**: Good (SATA SSD)
+- **<100 MB/s**: Check for bottlenecks (antivirus, HDD, high system load)
+
+See `BENCHMARKS.md` for detailed methodology and troubleshooting.
+
 ## License
 
-Free to use under [MIT License](LICENSE) (or Apache-2.0 — see LICENSE file). 
+Free to use under [MIT License](LICENSE) (or Apache-2.0 — see LICENSE file).
 
 ## Support This Project
 
