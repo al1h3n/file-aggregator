@@ -30,8 +30,8 @@ File Aggregator takes multiple files from your filesystem and combines them into
 ### Build from Source
 
 ```bash
-# Clone the repository
-git clone <repository-url>
+# Clone the repository, add --depth=1 --filter=blob:none
+git clone https://github.com/al1h3n/file-aggregator.git
 cd file-aggregator
 
 # Build release binary
