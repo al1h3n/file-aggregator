@@ -1,6 +1,9 @@
 # Performance Benchmarks
 
-## Test Environment
+## Test Environment (September 2026 results)
+
+The v0.2.0 comparison further down was measured on a different machine; its setup is listed
+with it.
 
 **Hardware Specifications:**
 - **CPU:** Intel Core i7-12700F (12th Gen, 12 cores, 20 threads)
@@ -49,7 +52,7 @@ Same functionality as PowerShell version.
 ### Option 3: Rust Integration Test
 
 ```bash
-cargo test --test benchmark -- --ignored --nocapture
+cargo test --release --test benchmark -- --ignored --nocapture
 ```
 
 **Advantages:**
@@ -75,9 +78,36 @@ rm -rf test_data output.md
 
 ## Performance Results
 
-### Current Implementation: Parallel I/O (stdlib threads)
+### v0.2.0 vs v0.1.0, same machine (November 3, 2026)
 
-**Actual Benchmark Results (September 20, 2026):**
+Both versions measured back to back with the same data: 20 files × 10 MB, 5 runs, files
+in the OS page cache. Both include sanitizing the output (v0.1.0 did that as a second pass
+over the whole result in the CLI/GUI; v0.2.0 does it per file inside the parallel readers).
+
+| Data | v0.1.0 | v0.2.0 | Speedup |
+|---|---|---|---|
+| `plain` (one repeated letter) | 555 ms · 360 MB/s | 191–202 ms · ~1,020 MB/s | **~2.8×** |
+| `code` (newlines, tabs, some Unicode) | 603–622 ms · ~330 MB/s | 223–244 ms · ~860 MB/s | **~2.6×** |
+| Peak memory, whole run | 959 MB | 423 MB | **−56 %** |
+
+**Test configuration:** cloud VM, 4 vCPUs, 15 GB RAM, Linux 6.18, rustc 1.99.1.
+`cargo test --release --test benchmark -- --ignored --nocapture` for v0.2.0; the same
+loop calling `aggregate_files` + `strip_control_chars` on a v0.1.0 checkout.
+
+### Where the time went, and what changed
+
+| v0.1.0 | v0.2.0 |
+|---|---|
+| Each file canonicalized twice, stat-ed 3 times and opened 3–4 times (`infer`'s 8 KB sniff, a 4-byte header read, another for executables, then the full read) | Validated (canonicalize + one stat), then opened and read **once**; type detection runs on the bytes in memory |
+| One OS thread per file (1,000 files = 1,000 threads), results through `Arc<Mutex<Vec>>` | rayon's pool, one thread per core; `collect` keeps the order, no locks |
+| 200 MB limit checked after every file was already read | Sizes summed from metadata first: fails before reading a byte |
+| `format!` per file, then appended (an extra copy of every file) | One output `String` allocated at its final size |
+| Sanitizing walked the whole output char by char, then copied it | Per file, in parallel; 32-byte chunks with a vectorizable "all printable?" test; clean text isn't copied at all |
+
+**Code:** `src/aggregator.rs` (`aggregate_files_with_prompt`), `src/security.rs`
+(`read_file_safe`, `strip_control_chars_cow`).
+
+### Earlier result (v0.1.0, September 20, 2026)
 
 | Metric | Value |
 |--------|-------|
@@ -86,43 +116,10 @@ rm -rf test_data output.md
 | Max Time | 253ms |
 | Total Data | 200MB (20 files × 10MB) |
 | **Throughput** | **840.34 MB/s** |
-| Standard Deviation | ±9ms |
 
-**Test Configuration:**
-- Method: `cargo test --test benchmark --release -- --ignored --nocapture`
-- Iterations: 5 runs
-- Hardware: Intel Core i7-12700F, 32GB RAM, NVMe SSD
-- OS: Windows 11
-- Rust: rustc 1.97.1
-- Date: September 20, 2026
-
-**Analysis:**
-- Achieved **2.1x better throughput** than initially predicted (840 MB/s vs 400-500 MB/s expected)
-- Consistent performance across runs (230-253ms range, ~9.5% variance)
-- NVMe SSD showing excellent parallel I/O scaling
-- Parallel implementation using stdlib threads proves highly effective
-
-**Note:** Results will vary based on:
-- Storage type (NVMe > SATA SSD > HDD)
-- OS disk caching
-- Available CPU cores
-- System load
-
-### Implementation Details
-
-The parallel I/O uses:
-- `std::thread::spawn()` - one thread per file
-- `Arc<Mutex<Vec>>` - thread-safe result collection
-- Order preservation via index tracking
-
-**Code location:** `src/aggregator.rs` lines 23-81
-
-### Comparison: Before vs After
-
-| Version | Implementation | Expected Time (200MB) |
-|---------|---------------|----------------------|
-| Before | Sequential I/O | ~2000ms |
-| After (Current) | Parallel (stdlib threads) | ~400-500ms |
+Intel Core i7-12700F, 32 GB RAM, NVMe SSD, Windows 11, rustc 1.97.1. This measured
+`aggregate_files` alone, without the sanitizing pass that ran afterwards, so it isn't
+comparable with the table above.
 
 ### Real-World Performance Factors
 
@@ -166,7 +163,10 @@ Comprehensive PowerShell benchmark with automatic test file generation and clean
 Linux/macOS version using dd for file generation.
 
 ### tests/benchmark.rs
-Rust integration test for direct function-level benchmarking.
+Rust integration test for direct function-level benchmarking (`plain` and `code` data sets).
+
+### benches/file_aggregation.rs
+Criterion benchmark (20 × 1 MB code-like files): `cargo bench --bench file_aggregation`.
 
 ## Future Benchmarks
 
@@ -175,7 +175,6 @@ Additional test cases to consider:
 1. **Varying File Counts:** 5, 10, 20, 50, 100 files
 2. **Varying File Sizes:** 1MB, 5MB, 10MB, 50MB
 3. **Mixed File Types:** Text, binary, compressed
-4. **Memory Usage:** Track peak RAM during aggregation
 5. **CPU Utilization:** Monitor thread efficiency
 
 ## Contributing Benchmark Results

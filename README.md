@@ -175,14 +175,21 @@ sudo mv file-aggregator-linux-x86_64 /usr/local/bin/file-aggregator
 
 ## Performance
 
-Run the end-to-end benchmark (20 files × 10 MB, 5 runs) with:
+20 files × 10 MB (the 200 MB limit), same machine, back to back, output sanitized in both:
+
+| | v0.1.0 | v0.2.0 |
+|---|---|---|
+| Code-like text | 603 ms | **223–244 ms** (~2.6× faster) |
+| One repeated letter | 555 ms | **191–202 ms** (~2.8× faster) |
+| Peak memory | 959 MB | **423 MB** |
+
+4-vCPU Linux VM, files in the page cache. What changed and how to run it yourself:
+[BENCHMARKS.md](BENCHMARKS.md).
 
 ```bash
 cargo test --release --test benchmark -- --ignored --nocapture
 cargo bench --bench file_aggregation   # criterion, 20 × 1 MB code files
 ```
-
-See [BENCHMARKS.md](BENCHMARKS.md) for methodology.
 
 ## How the Window Is Built
 
