@@ -1,53 +1,34 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use std::fs;
+//! Criterion benchmark: `cargo bench --bench file_aggregation`.
+//!
+//! Aggregates 20 code-like files of 1 MB (newlines, tabs, a little Unicode) so the
+//! sanitizer and the parallel reader both do realistic work.
+
+use criterion::{Criterion, Throughput, criterion_group, criterion_main};
+use std::hint::black_box;
 use std::path::PathBuf;
-use std::io::Write;
 
-// Import the aggregator module
-// Note: This assumes the aggregator is exposed as a public module
-// We'll need to adjust based on actual project structure
+const SNIPPET: &str = "fn main() {\n\tlet greeting = \"héllo — wörld\";\n\tprintln!(\"{greeting} {}\", 42);\n}\n\n";
 
-fn generate_test_files(count: usize, size_mb: usize) -> Vec<PathBuf> {
-    let test_dir = PathBuf::from(".bench_test_files");
-    
-    // Clean up previous run
-    let _ = fs::remove_dir_all(&test_dir);
-    fs::create_dir_all(&test_dir).expect("Failed to create test directory");
-    
-    let mut paths = Vec::new();
-    let content = "x".repeat(size_mb * 1024 * 1024); // MB of data
-    
-    for i in 0..count {
-        let path = test_dir.join(format!("test_file_{}.txt", i));
-        let mut file = fs::File::create(&path).expect("Failed to create test file");
-        file.write_all(content.as_bytes()).expect("Failed to write test file");
-        paths.push(path);
-    }
-    
-    paths
-}
-
-fn cleanup_test_files() {
-    let test_dir = PathBuf::from(".bench_test_files");
-    let _ = fs::remove_dir_all(&test_dir);
+fn generate_test_files(dir: &std::path::Path, count: usize, size: usize) -> Vec<PathBuf> {
+    let content = SNIPPET.repeat(size / SNIPPET.len());
+    (0..count)
+        .map(|i| {
+            let path = dir.join(format!("test_file_{i}.rs"));
+            std::fs::write(&path, &content).expect("write test file");
+            path
+        })
+        .collect()
 }
 
 fn benchmark_aggregation(c: &mut Criterion) {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let paths = generate_test_files(dir.path(), 20, 1024 * 1024);
+    let bytes: u64 = paths.iter().map(|p| std::fs::metadata(p).unwrap().len()).sum();
+
     let mut group = c.benchmark_group("file_aggregation");
-    
-    // Test case from Patrick: 20 files × 10MB each
-    let paths = generate_test_files(20, 10);
-    
-    group.bench_function("20x10MB_files", |b| {
-        b.iter(|| {
-            // Note: We need to call the actual aggregation function here
-            // This is a placeholder that needs to be replaced with the actual call
-            black_box(&paths);
-        });
-    });
-    
+    group.throughput(Throughput::Bytes(bytes));
+    group.bench_function("20x1MB_code_files", |b| b.iter(|| black_box(file_aggregator::aggregator::aggregate_files(black_box(&paths)).unwrap())));
     group.finish();
-    cleanup_test_files();
 }
 
 criterion_group!(benches, benchmark_aggregation);
