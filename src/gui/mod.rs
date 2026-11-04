@@ -632,8 +632,9 @@ impl App {
                 panel: g.add(Glass::new(rect(l.panel)).shape(Shape::Rounded(PANEL_RADIUS)).material(panel_material())),
                 background_button: g.add(Glass::new(rect(l.background_button)).interactive().container(picker)),
                 bar: g.add(Glass::new(rect(l.bar)).interactive().container(toolbar)),
-                // Copy stays out of the toolbar container: fused liquid-rust glass shares one
-                // material, so merging with the bar (e.g. while pressed) would drop its tint.
+                // Copy stays out of the toolbar container: in liquid-rust 0.2.4 fused glass
+                // shares one material, so merging with the bar (e.g. while pressed) would drop
+                // its tint. 0.2.5 keeps each shape's material; Copy can then join `toolbar`.
                 copy: g.add(Glass::new(rect(l.copy)).material(copy_material(can_copy)).interactive()),
                 clear: None,
                 toast: None,
