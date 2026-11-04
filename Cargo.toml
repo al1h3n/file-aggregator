@@ -1,32 +1,53 @@
 [package]
 name = "file-aggregator"
-version = "0.1.0"
-edition = "2021"
+version = "0.2.0"
+edition = "2024"
+# liquid-rust needs Rust 1.99.
+rust-version = "1.99"
+description = "Aggregate files into one Markdown prompt, from a Liquid Glass GUI or the command line."
+license = "MIT"
 
 [dependencies]
-egui = "0.36"
-eframe = "0.36"
-clap = { version = "4.5", features = ["derive"] }
-arboard = "3.4"
+# GUI: egui/eframe on wgpu. `persistence` remembers the chosen background and window size.
+eframe = { version = "0.37", features = ["persistence"] }
+# Apple-style Liquid Glass rendered with wgpu (same wgpu 30 that eframe uses).
+liquid-rust = "0.2.4"
+# Material Symbols (Rounded, outlined) icon font for egui 0.37.
+egui_material_icons = { version = "0.9", default-features = false, features = ["outline"] }
+bytemuck = { version = "1.25", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+# Parallel file reading on a bounded thread pool.
+rayon = "1.12"
+clap = { version = "4.6", features = ["derive"] }
+arboard = "3.7"
 infer = "0.22"
 base64 = "0.23"
 rfd = "0.17"
 anyhow = "1.0"
-image = "0.25"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "bmp", "tiff"] }
 
 [build-dependencies]
 winres = "0.1"
 ico = "0.5"
-image = "0.25"
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [dev-dependencies]
-tempfile = "3.13"
+tempfile = "3.27"
+criterion = "0.8"
+ron = "0.12"
 
 [lib]
 name = "file_aggregator"
 path = "src/lib.rs"
 
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+
 [profile.release]
 strip = true
 lto = true
 codegen-units = 1
+
+[[bench]]
+name = "file_aggregation"
+harness = false
