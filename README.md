@@ -23,13 +23,16 @@ common use is giving an AI assistant the context of several source files at once
 
 - **Two interfaces**: a window with drag and drop, and a full command line.
 - **Calm Liquid Glass interface** rendered on the GPU with
-  [liquid-rust](https://crates.io/crates/liquid-rust). The glass is there to carry context,
-  not to decorate:
+  [liquid-rust](https://github.com/al1h3n/liquid-rust), tuned to Apple's glass as measured
+  from iOS 27 recordings (the BitsUI Liquid Glass tokens). Glass is nearly clear: what's
+  behind stays sharp, it bends at the rim, colour glows through (vibrancy), and a thin face
+  keeps text legible. Surfaces grow out of their button and launch at full speed. The glass
+  carries context, not decoration:
   - the files sit on one quiet frosted panel, with names in full contrast and folder, size and
     type dimmed;
   - **Copy** is the only tinted button;
-  - feedback grows out of the toolbar as a glass toast ("Copied 74.5 KB · ≈19k tokens") and
-    folds back into it;
+  - feedback grows out of the toolbar as a glass toast ("Copied 46.6 KB · ≈12k tokens") and
+    folds back into it, its text arriving as the glass lands;
   - the panel swells and turns blue while you drag files over the window;
   - scripts and executables are confirmed on one glass sheet per drop, not one dialog per file.
 - **Your background**: grey by default, or any colour, a gradient or a photo. Your choice is
@@ -193,8 +196,11 @@ cargo bench --bench file_aggregation   # criterion, 20 × 1 MB code files
 
 ## How the Window Is Built
 
-- **egui 0.37** (eframe on wgpu) draws text and widgets. Icons are Material Symbols Rounded
-  ([egui_material_icons](https://crates.io/crates/egui_material_icons)).
+- **egui 0.37** (eframe on wgpu) draws text and widgets, in Inter Variable at two weights
+  ([shadcn-egui-font-inter](https://crates.io/crates/shadcn-egui-font-inter), OFL). Icons are
+  Material Symbols Rounded ([egui_material_icons](https://crates.io/crates/egui_material_icons)).
+  Controls follow the BitsUI Liquid Glass components: `.lg-bar` capsules, the `.lg-segmented`
+  scheme picker, `.lg-fill` and `.lg-tinted` buttons.
 - **liquid-rust** draws the glass under them. A paint callback renders the background into a
   texture, which is redrawn only when the background or window size changes. liquid-rust then
   refracts that texture into a second one, but only when something moved. The callback copies

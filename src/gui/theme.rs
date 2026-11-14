@@ -141,3 +141,27 @@ pub fn apply(ctx: &egui::Context, palette: &Palette) {
         style.interaction.tooltip_delay = 0.5;
     });
 }
+
+/// Name of the semibold family (titles, the primary button), see [`install_fonts`].
+const SEMIBOLD: &str = "inter-semibold";
+
+/// Inter at a semibold weight, for titles and the primary action (SF's semibold role).
+pub fn semibold() -> FontFamily {
+    FontFamily::Name(SEMIBOLD.into())
+}
+
+/// Makes Inter (variable, OFL) the interface font: weight 420 for text, a little fuller than
+/// Regular so it holds up on glass at 1x like SF Pro Text does, and 600 as [`semibold`].
+/// One embedded file serves both. Glyphs Inter lacks (CJK, emoji, icons) still fall back to
+/// the icon font and the system fonts.
+pub fn install_fonts(ctx: &egui::Context) {
+    use egui::epaint::text::{FontInsert, FontPriority, InsertFontFamily, VariationCoords};
+    let shadcn_egui_core::FontSource::Variable { data, .. } = shadcn_egui_font_inter::FONT.source else { return };
+    let inter = |name: &str, weight: f32, family: FontFamily| {
+        let mut font = egui::FontData::from_static(data);
+        font.tweak.coords = VariationCoords::new([(b"wght", weight)]);
+        FontInsert::new(name, font, vec![InsertFontFamily { family, priority: FontPriority::Highest }])
+    };
+    ctx.add_font(inter("inter", 420.0, FontFamily::Proportional));
+    ctx.add_font(inter(SEMIBOLD, 600.0, semibold()));
+}
