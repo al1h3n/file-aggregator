@@ -10,8 +10,13 @@ license = "MIT"
 [dependencies]
 # GUI: egui/eframe on wgpu. `persistence` remembers the chosen background and window size.
 eframe = { version = "0.37", features = ["persistence"] }
-# Apple-style Liquid Glass rendered with wgpu (same wgpu 30 that eframe uses).
-liquid-rust = "0.2.4"
+# Apple-style Liquid Glass rendered with wgpu (same wgpu 30 that eframe uses), from git:
+# 0.3.0 adds vibrancy (saturation), per-shape materials in fused glass, launched springs
+# and morph_from/shrink_into. Switch `branch` to "main" once it is merged there.
+liquid-rust = { git = "https://github.com/al1h3n/liquid-rust.git", branch = "claude/zen-faraday-258pix" }
+# Inter Variable (OFL): an SF-like UI typeface, at two weights from one file.
+shadcn-egui-font-inter = "0.8"
+shadcn-egui-core = "0.8"
 # Material Symbols (Rounded, outlined) icon font for egui 0.37.
 egui_material_icons = { version = "0.9", default-features = false, features = ["outline"] }
 bytemuck = { version = "1.25", features = ["derive"] }

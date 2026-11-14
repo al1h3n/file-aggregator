@@ -31,7 +31,7 @@ use egui_material_icons::icons::{
     ICON_ADD, ICON_CHECK, ICON_CHECK_CIRCLE, ICON_CLOSE, ICON_CONTENT_COPY, ICON_DELETE, ICON_DOWNLOAD, ICON_ERROR, ICON_INFO, ICON_PALETTE, ICON_UPLOAD_FILE,
     ICON_WARNING,
 };
-use liquid_rust::{Appearance, ContainerId, Glass, GlassId, Material, Shape, Spring};
+use liquid_rust::{Appearance, Glass, GlassId, Material, Shape};
 use serde::{Deserialize, Serialize};
 
 use crate::aggregator::aggregate_files_with_prompt;
@@ -49,10 +49,11 @@ const MARGIN: f32 = 16.0;
 /// Between toolbar glass. Equal to the toolbar container's merge spacing, so the toast
 /// rests cleanly apart from the bar it grew out of (see liquid-rust's `Container::spacing`).
 const GAP: f32 = 12.0;
-const BAR_H: f32 = 40.0;
-const ADD_W: f32 = 82.0;
-const SAVE_W: f32 = 86.0;
-const COPY_W: f32 = 100.0;
+/// Apple's minimum control height (`.lg-button`, 44 pt).
+const BAR_H: f32 = 44.0;
+const ADD_W: f32 = 86.0;
+const SAVE_W: f32 = 90.0;
+const COPY_W: f32 = 106.0;
 const PANEL_RADIUS: f32 = 24.0;
 /// Panel inner padding.
 const PAD: f32 = 16.0;
@@ -200,7 +201,6 @@ struct PhotoJob {
 
 /// Handles of the glass in the scene.
 struct Ids {
-    toolbar: ContainerId,
     panel: GlassId,
     background_button: GlassId,
     bar: GlassId,
@@ -301,27 +301,76 @@ fn toast_width(ctx: &egui::Context, toast: &Toast) -> f32 {
     16.0 + 20.0 + 8.0 + text + undo + 18.0
 }
 
-/// The content panel: regular glass, a little calmer at the edge than buttons, so it
-/// reads as a surface rather than an effect.
-fn panel_material() -> Material {
-    Material { refraction: 0.5, dispersion: 0.08, specular: 0.22, ..Material::regular() }
+// Materials follow Apple's glass as measured for the web (BitsUI Liquid Glass tokens) and as
+// seen in the iOS 27 / Siri recordings: almost no frost (what is behind stays sharp), strong
+// bending in a wide rim, no colour fringe, vibrancy (saturation 1.6), a thin translucent face
+// (white in the light scheme, near-black in the dark one) and a crisp lit rim. Legibility
+// comes from the face, not from blur. None of them use the "thicker when larger" ramp:
+// that ramp is what made the old panel a milky slab.
+
+/// Backdrop tone of a face: `white` is the white fill's opacity in the light scheme, `dark`
+/// the opacity of the near-black fill (`#1C1C1E`/`#28282C`) in the dark scheme.
+fn faces(white: f32, dark: f32, dark_grey: f32) -> (liquid_rust::Tone, liquid_rust::Tone) {
+    let light = liquid_rust::Tone { lift: 0.0, luminance: 0.92, luminance_mix: 0.08, lighten: white, darken_to: 1.0, darken: 0.0 };
+    let night = liquid_rust::Tone { lift: 0.015, luminance: 0.2, luminance_mix: 0.08, lighten: 0.0, darken_to: dark_grey, darken: dark };
+    (light, night)
 }
 
-/// Picker and warning sheet: frostier and more opaque than the panel, with a deeper
-/// shadow, so they read as floating above it (like iOS menus).
-fn menu_material() -> Material {
-    let base = Material::regular();
+/// Controls (toolbar capsules, round buttons, toasts): `.lg-glass`. Frost σ 2 pt, face 18 %
+/// white or 32 % `#28282C`, shadow 0 8 28 at 14 %.
+fn control_material() -> Material {
+    let (light_tone, dark_tone) = faces(0.18, 0.32, 40.0 / 255.0);
     Material {
-        frost: 18.0,
-        shadow: liquid_rust::Shadow { offset_y: 14.0, blur: 36.0, opacity: 0.22 },
-        light_tone: liquid_rust::Tone { lighten: 0.55, ..base.light_tone },
-        dark_tone: liquid_rust::Tone { darken: 0.55, ..base.dark_tone },
-        ..base
+        refraction: 0.75,
+        depth: 18.0,
+        dispersion: 0.0,
+        frost: 4.0,
+        specular: 0.45,
+        rim: 0.16,
+        edge: 0.22,
+        shadow: liquid_rust::Shadow { offset_y: 8.0, blur: 28.0, opacity: 0.14 },
+        light_tone,
+        dark_tone,
+        adaptive: false,
+        saturation: 1.6,
+        ..Material::regular()
     }
 }
 
+/// The content panel, a floating card like Siri's answer cards: the same clear glass with a
+/// wide bevel that bends the backdrop at the rim, and a fuller face so the list reads over
+/// any photo (still see-through: the background shows in it, sharper than before).
+fn panel_material() -> Material {
+    let (light_tone, dark_tone) = faces(0.5, 0.62, 28.0 / 255.0);
+    Material {
+        depth: 28.0,
+        frost: 8.0,
+        specular: 0.5,
+        shadow: liquid_rust::Shadow { offset_y: 12.0, blur: 40.0, opacity: 0.2 },
+        light_tone,
+        dark_tone,
+        ..control_material()
+    }
+}
+
+/// Menus and the warning sheet (`.lg-pop`, `.lg-sheet`): more opaque than the panel, like
+/// iOS menus, with the deeper sheet shadow.
+fn menu_material() -> Material {
+    let (light_tone, dark_tone) = faces(0.72, 0.78, 28.0 / 255.0);
+    Material { frost: 14.0, shadow: liquid_rust::Shadow { offset_y: 14.0, blur: 40.0, opacity: 0.24 }, light_tone, dark_tone, ..panel_material() }
+}
+
+/// `.lg-tinted`: the one primary action, blue at 78 %; plain control glass while disabled.
 fn copy_material(enabled: bool) -> Material {
-    if enabled { Material::tinted(liquid_rust::Color::BLUE) } else { Material::regular() }
+    if enabled { control_material().tint(liquid_rust::Color::BLUE.with_alpha(0.92)) } else { control_material() }
+}
+
+/// How far glass that is opening has come, `0..=1` (current size over final size), so its
+/// content arrives with it: transparent while the shape is still a blob, sharp as it lands.
+fn arrival(current: Rect, target: Rect) -> f32 {
+    let t = (current.width() / target.width().max(1.0)).min(current.height() / target.height().max(1.0));
+    let t = ((t - 0.55) / 0.4).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
 }
 
 // ---------------------------------------------------------------------------------------
@@ -332,6 +381,7 @@ impl App {
     fn new(cc: &eframe::CreationContext<'_>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let glass = GlassLayer::new(cc).ok_or("File Aggregator needs the wgpu renderer")?;
         egui_material_icons::initialize(&cc.egui_ctx);
+        theme::install_fonts(&cc.egui_ctx);
         let settings: Settings = cc.storage.and_then(|s| eframe::get_value(s, SETTINGS_KEY)).unwrap_or_default();
 
         let mut app = Self {
@@ -626,16 +676,12 @@ impl App {
         let can_copy = !self.files.is_empty() && !self.picker_open && self.pending.is_empty();
         let ids = self.ids.get_or_insert_with(|| {
             let toolbar = g.add_container(GAP, 0);
-            let picker = g.add_container(GAP, 2);
             Ids {
-                toolbar,
                 panel: g.add(Glass::new(rect(l.panel)).shape(Shape::Rounded(PANEL_RADIUS)).material(panel_material())),
-                background_button: g.add(Glass::new(rect(l.background_button)).interactive().container(picker)),
-                bar: g.add(Glass::new(rect(l.bar)).interactive().container(toolbar)),
-                // Copy stays out of the toolbar container: in liquid-rust 0.2.4 fused glass
-                // shares one material, so merging with the bar (e.g. while pressed) would drop
-                // its tint. 0.2.5 keeps each shape's material; Copy can then join `toolbar`.
-                copy: g.add(Glass::new(rect(l.copy)).material(copy_material(can_copy)).interactive()),
+                background_button: g.add(Glass::new(rect(l.background_button)).material(control_material()).interactive()),
+                bar: g.add(Glass::new(rect(l.bar)).material(control_material()).interactive().container(toolbar)),
+                // Pressing Add or Save leans the bar toward Copy; Copy keeps its own tint.
+                copy: g.add(Glass::new(rect(l.copy)).material(copy_material(can_copy)).interactive().container(toolbar)),
                 clear: None,
                 toast: None,
                 picker: None,
@@ -655,7 +701,7 @@ impl App {
         g.set_material(ids.copy, copy_material(can_copy));
 
         match (!self.files.is_empty(), ids.clear) {
-            (true, None) => ids.clear = Some(g.add(Glass::new(rect(l.clear)).interactive())),
+            (true, None) => ids.clear = Some(g.add(Glass::new(rect(l.clear)).material(control_material()).interactive())),
             (true, Some(id)) => g.frame_to(id, l.clear, animate),
             (false, Some(id)) => {
                 g.remove(id);
@@ -665,10 +711,10 @@ impl App {
         }
 
         match (self.toast.is_some(), ids.toast) {
-            (true, None) => ids.toast = Some(g.expand_from(ids.bar, Glass::new(rect(l.toast)).container(ids.toolbar), Spring::new(0.45, 0.18))),
+            (true, None) => ids.toast = Some(g.morph_from(ids.bar, Glass::new(rect(l.toast)).material(control_material()).z(1))),
             (true, Some(id)) => g.frame_to(id, l.toast, true),
             (false, Some(id)) => {
-                g.collapse_into(id, ids.bar, Spring::new(0.32, 0.0));
+                g.shrink_into(id, ids.bar);
                 ids.toast = None;
             }
             (false, None) => {}
@@ -676,22 +722,18 @@ impl App {
 
         match (self.picker_open, ids.picker) {
             (true, None) => {
-                ids.picker = Some(g.expand_from(
-                    ids.background_button,
-                    Glass::new(rect(l.picker)).shape(Shape::Rounded(26.0)).material(menu_material()),
-                    Spring::new(0.5, 0.2),
-                ))
+                ids.picker = Some(g.morph_from(ids.background_button, Glass::new(rect(l.picker)).shape(Shape::Rounded(28.0)).material(menu_material()).z(3)));
             }
             (true, Some(id)) => g.frame_to(id, l.picker, animate),
             (false, Some(id)) => {
-                g.collapse_into(id, ids.background_button, Spring::new(0.34, 0.0));
+                g.shrink_into(id, ids.background_button);
                 ids.picker = None;
             }
             (false, None) => {}
         }
 
         match (!self.pending.is_empty(), ids.sheet) {
-            (true, None) => ids.sheet = Some(g.add(Glass::new(rect(l.sheet)).shape(Shape::Rounded(28.0)).material(menu_material()).z(3))),
+            (true, None) => ids.sheet = Some(g.add(Glass::new(rect(l.sheet)).shape(Shape::Rounded(34.0)).material(menu_material()).z(3))),
             (true, Some(id)) => g.frame_to(id, l.sheet, animate),
             (false, Some(id)) => {
                 g.remove(id);
@@ -895,7 +937,7 @@ impl App {
         let Some(toast) = &self.toast else { return };
         // Draw inside the glass as it is right now, so text never spills while it grows.
         let glass = self.ids.as_ref().and_then(|ids| ids.toast).and_then(|id| g.current_frame(id)).unwrap_or(l.toast);
-        let fade = ui.ctx().animate_bool_with_time(Id::unique(("toast", toast.id)), true, 0.25);
+        let fade = arrival(glass, l.toast);
         let mut painter = ui.painter().with_clip_rect(glass.intersect(l.toast));
         painter.multiply_opacity(fade);
         // Registered first so the Undo button (added after) sits on top of it for clicks.
@@ -932,7 +974,7 @@ impl App {
     fn picker_ui(&mut self, ctx: &egui::Context, l: &Layout, g: &Shared, screen: Rect) {
         let p = self.palette;
         let glass = self.ids.as_ref().and_then(|ids| ids.picker).and_then(|id| g.current_frame(id)).unwrap_or(l.picker);
-        let fade = ctx.animate_bool_with_time(Id::unique("picker_fade"), true, 0.2);
+        let fade = arrival(glass, l.picker);
         let mut chosen: Option<Background> = None;
         let mut choose_photo = false;
         let current = self.settings.background.clone();
@@ -944,12 +986,9 @@ impl App {
                 ui.set_width(PICKER_SIZE.x - 32.0);
                 ui.set_height(PICKER_SIZE.y - 28.0);
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new("Background").size(BODY).color(p.text));
+                    ui.label(RichText::new("Background").size(BODY + 1.0).family(theme::semibold()).color(p.text));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.spacing_mut().item_spacing.x = 2.0;
-                        for (scheme, label) in [(Scheme::Dark, "Dark"), (Scheme::Light, "Light"), (Scheme::Auto, "Auto")] {
-                            ui.selectable_value(&mut self.settings.scheme, scheme, RichText::new(label).size(CAPTION));
-                        }
+                        segmented(ui, &mut self.settings.scheme, &[(Scheme::Auto, "Auto"), (Scheme::Light, "Light"), (Scheme::Dark, "Dark")], p);
                     });
                 });
                 ui.add_space(6.0);
@@ -993,7 +1032,7 @@ impl App {
                 section(ui, "Photo", p);
                 ui.horizontal(|ui| {
                     let loading = self.photo_job.is_some();
-                    if ui.add_enabled(!loading, egui::Button::new(RichText::new("Choose photo…").size(SMALL))).clicked() {
+                    if ui.add_enabled(!loading, fill_button("Choose photo…", p)).clicked() {
                         choose_photo = true;
                     }
                     if loading {
@@ -1058,16 +1097,8 @@ impl App {
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::Max), |ui| {
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let add = egui::Button::new(RichText::new("Add anyway").size(BODY).color(Color32::WHITE))
-                                .fill(p.accent)
-                                .corner_radius(CornerRadius::same(15))
-                                .min_size(vec2(108.0, 30.0));
-                            accept = ui.add(add).clicked();
-                            let skip_button = egui::Button::new(RichText::new("Skip").size(BODY).color(p.text))
-                                .fill(p.fill)
-                                .corner_radius(CornerRadius::same(15))
-                                .min_size(vec2(76.0, 30.0));
-                            skip = ui.add(skip_button).clicked();
+                            accept = ui.add(tinted_button("Add anyway", p)).clicked();
+                            skip = ui.add(fill_button("Skip", p)).clicked();
                         });
                     });
                 });
@@ -1123,7 +1154,7 @@ impl eframe::App for App {
             }
             // Labels are drawn above all glass, so whatever sits under the picker or sheet
             // must fade far enough not to show through it.
-            ui.multiply_opacity(1.0 - 0.88 * dim);
+            ui.multiply_opacity(1.0 - 0.95 * dim);
             self.panel_ui(ui, &layout);
             self.toolbar_ui(ui, &layout, &g);
         });
@@ -1209,6 +1240,53 @@ fn glass_button(ui: &mut egui::Ui, rect: Rect, name: &str, glyph: Glyph, label: 
         painter.galley(pos2(glyph_rect.right() + 6.0, rect.center().y - label.size().y / 2.0), label, color);
     }
     response
+}
+
+/// `.lg-segmented`: options in a grey capsule track; the chosen one sits on a white pill
+/// with a soft shadow (a dark-grey pill in the dark scheme) and reads semibold.
+fn segmented<T: Copy + PartialEq>(ui: &mut egui::Ui, value: &mut T, options: &[(T, &str)], p: Palette) {
+    let font = |selected: bool| FontId::new(CAPTION + 0.5, if selected { theme::semibold() } else { egui::FontFamily::Proportional });
+    let widths: Vec<f32> =
+        options.iter().map(|&(v, label)| ui.painter().layout_no_wrap(label.to_string(), font(v == *value), p.text).size().x + 20.0).collect();
+    let segment_w = widths.iter().copied().fold(0.0, f32::max);
+    let (track, _) = ui.allocate_exact_size(vec2(segment_w * options.len() as f32 + 4.0, 26.0), Sense::hover());
+    let painter = ui.painter();
+    painter.rect_filled(
+        track,
+        CornerRadius::same(13),
+        if p.dark { Color32::from_rgba_unmultiplied(118, 118, 128, 61) } else { Color32::from_rgba_unmultiplied(118, 118, 128, 31) },
+    );
+    for (i, &(option, label)) in options.iter().enumerate() {
+        let rect = Rect::from_min_size(pos2(track.left() + 2.0 + i as f32 * segment_w, track.top() + 2.0), vec2(segment_w, track.height() - 4.0));
+        let response = ui.interact(rect, Id::unique(("segmented", label)), Sense::click());
+        let selected = option == *value;
+        if selected {
+            painter.rect_filled(rect.translate(vec2(0.0, 1.0)), CornerRadius::same(11), Color32::from_black_alpha(18));
+            painter.rect_filled(rect, CornerRadius::same(11), if p.dark { Color32::from_rgb(0x63, 0x63, 0x66) } else { Color32::from_white_alpha(235) });
+        } else if response.hovered() {
+            painter.rect_filled(rect, CornerRadius::same(11), p.hover);
+        }
+        painter.text(rect.center(), Align2::CENTER_CENTER, label, font(selected), if selected { p.text } else { p.secondary });
+        if response.clicked() {
+            *value = option;
+        }
+    }
+}
+
+/// `.lg-fill`: a secondary button sitting on glass, a vibrant grey capsule, never a second glass.
+fn fill_button(label: &str, p: Palette) -> egui::Button<'static> {
+    egui::Button::new(RichText::new(label).size(SMALL + 0.5).color(p.text))
+        .fill(Color32::from_rgba_unmultiplied(127, 127, 127, if p.dark { 56 } else { 41 }))
+        .corner_radius(CornerRadius::same(16))
+        .min_size(vec2(76.0, 32.0))
+}
+
+/// `.lg-tinted` text button: the one primary action on a surface, semibold white on blue.
+fn tinted_button(label: &str, p: Palette) -> egui::Button<'static> {
+    egui::Button::new(RichText::new(label).size(SMALL + 0.5).family(theme::semibold()).color(Color32::WHITE))
+        .fill(p.accent)
+        .corner_radius(CornerRadius::same(16))
+        .min_size(vec2(108.0, 32.0))
 }
 
 /// Round colour swatch (`a == b` for a solid colour) with a ring when selected.

@@ -110,23 +110,27 @@ impl Shared {
         if animate { self.scene.set_frame(id, frame) } else { self.scene.place(id, frame) }
     }
 
+    /// Fades to `material`: a tint fades in or out instead of switching.
     pub fn set_material(&mut self, id: GlassId, material: Material) {
         if self.scene.glass(id).is_some_and(|g| g.material != material) {
             self.redraw = true;
-            self.scene.set_material(id, material);
+            self.scene.set_material_with(id, material, Spring::new(0.3, 0.0));
         }
     }
 
-    /// Grows new glass out of `source` (a toast out of the toolbar).
-    pub fn expand_from(&mut self, source: GlassId, glass: Glass, spring: Spring) -> GlassId {
+    /// iOS 27: the button *becomes* the surface (menu, toast). It starts as the button's
+    /// frame and outline and launches out at full speed (`Spring::EMERGE`), with no liquid
+    /// neck and no bulging button.
+    pub fn morph_from(&mut self, source: GlassId, glass: Glass) -> GlassId {
         self.redraw = true;
-        self.scene.expand_from(source, glass, spring)
+        self.scene.morph_from(source, glass, Spring::EMERGE)
     }
 
-    /// Folds glass back into `target` and drops it.
-    pub fn collapse_into(&mut self, id: GlassId, target: GlassId, spring: Spring) {
+    /// Reverse of [`Shared::morph_from`]: launches back into the button, quicker, and is
+    /// dropped the moment it lands.
+    pub fn shrink_into(&mut self, id: GlassId, target: GlassId) {
         self.redraw = true;
-        self.scene.collapse_into(id, target, spring);
+        self.scene.shrink_into(id, target, Spring::RECEDE);
     }
 
     /// Frame on screen right now, mid-animation.
